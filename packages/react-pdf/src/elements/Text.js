@@ -1,7 +1,8 @@
-import Base from './Base';
-import Yoga from '../../bin';
 import isNan from 'lodash.isnan';
 import upperFirst from 'lodash.upperfirst';
+import Base from './Base';
+import Yoga from '../../bin';
+import { chunkStringIntoPages } from '../utils/wrapping';
 
 class Text extends Base {
   width = null;
@@ -35,11 +36,11 @@ class Text extends Base {
     }, '');
   }
 
-  getWidth() {
+  calculateWidth() {
     return this.root.widthOfString(this.getRawValue());
   }
 
-  getHeight(width) {
+  calculateHeight(width) {
     return this.root.heightOfString(this.getRawValue(), { width });
   }
 
@@ -74,7 +75,7 @@ class Text extends Base {
     // If we have a known width, we just calculate the height of the text.
     if (widthMode === Yoga.MEASURE_MODE_EXACTLY) {
       this.width = width;
-      this.height = this.getHeight(this.width);
+      this.height = this.calculateHeight(this.width);
 
       return { height: this.style.flexGrow ? NaN : this.height };
     }
@@ -83,7 +84,7 @@ class Text extends Base {
     // width as it is, by returning NaN. Otherwise, we calculate the text width.
     if (heightMode === Yoga.MEASURE_MODE_EXACTLY) {
       this.height = height;
-      this.width = this.style.flexGrow ? NaN : this.getWidth();
+      this.width = this.style.flexGrow ? NaN : this.calculateWidth();
 
       return { width: this.width };
     }
@@ -99,8 +100,8 @@ class Text extends Base {
       !this.width &&
       !this.height
     ) {
-      this.width = Math.min(width, this.getWidth());
-      this.height = this.getHeight(this.width);
+      this.width = Math.min(width, this.calculateWidth());
+      this.height = this.calculateHeight(this.width);
 
       return { width: this.width, height: this.height };
     }
@@ -117,7 +118,19 @@ class Text extends Base {
     this.layout.markDirty();
   }
 
-  async renderText(text, isFirstNode) {
+  wrapElement() {
+    const parentWidth = this.parent.getWidth();
+
+    this.children = chunkStringIntoPages(
+      this.getRawValue(),
+      this.parent.getHeight(),
+      line => this.root.heightOfString(line, { width: parentWidth }),
+    );
+
+    return this.children.length;
+  }
+
+  async renderText(text) {
     const { align = 'left', textDecoration } = this.style;
 
     this.root.text(text, {
@@ -128,7 +141,7 @@ class Text extends Base {
     });
   }
 
-  async render() {
+  async render(page) {
     const padding = this.getComputedPadding();
     const { left, top, width, height } = this.getAbsoluteLayout();
     const { color = 'black' } = this.style;
@@ -145,18 +158,16 @@ class Text extends Base {
     });
 
     // Render childs: text and inline elements
-    for (let i = 0; i < this.children.length; i++) {
-      const child = this.children[i];
+    const child = this.children[page.currentSubPage];
 
-      this.setFontSize();
-      this.setFontFamily();
-      this.root.fillColor(color);
+    this.setFontSize();
+    this.setFontFamily();
+    this.root.fillColor(color);
 
-      if (typeof child === 'string') {
-        await this.renderText(child);
-      } else {
-        await child.render({ inline: true });
-      }
+    if (typeof child === 'string') {
+      await this.renderText(child);
+    } else {
+      await child.render({ inline: true });
     }
 
     // Text should not longer be continuos
