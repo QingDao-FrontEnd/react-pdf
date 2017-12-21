@@ -2,7 +2,6 @@ import isNan from 'lodash.isnan';
 import upperFirst from 'lodash.upperfirst';
 import Base from './Base';
 import Yoga from '../../bin';
-import { chunkStringIntoPages } from '../utils/wrapping';
 
 class Text extends Base {
   width = null;
@@ -118,17 +117,17 @@ class Text extends Base {
     this.layout.markDirty();
   }
 
-  wrapElement() {
-    const parentWidth = this.parent.getWidth();
-
-    this.children = chunkStringIntoPages(
-      this.getRawValue(),
-      this.parent.getHeight(),
-      line => this.root.heightOfString(line, { width: parentWidth }),
-    );
-
-    return this.children.length;
-  }
+  // wrapElement() {
+  //   const parentWidth = this.parent.getWidth();
+  //
+  //   this.children = chunkStringIntoPages(
+  //     this.getRawValue(),
+  //     this.parent.getHeight(),
+  //     line => this.root.heightOfString(line, { width: parentWidth }),
+  //   );
+  //
+  //   return this.children.length;
+  // }
 
   async renderText(text) {
     const { align = 'left', textDecoration } = this.style;
@@ -158,20 +157,22 @@ class Text extends Base {
     });
 
     // Render childs: text and inline elements
-    const child = this.children[page.currentSubPage];
+    for (let i = 0; i < this.children.length; i++) {
+      const child = this.children[i];
 
-    this.setFontSize();
-    this.setFontFamily();
-    this.root.fillColor(color);
+      this.setFontSize();
+      this.setFontFamily();
+      this.root.fillColor(color);
 
-    if (typeof child === 'string') {
-      await this.renderText(child);
-    } else {
-      await child.render({ inline: true });
+      if (typeof child === 'string') {
+        await this.renderText(child);
+      } else {
+        await child.render({ inline: true });
+      }
+
+      // Text should not longer be continuos
+      this.root.text('', { continued: false });
     }
-
-    // Text should not longer be continuos
-    this.root.text('', { continued: false });
   }
 }
 
